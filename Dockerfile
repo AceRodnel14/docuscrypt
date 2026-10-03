@@ -1,18 +1,22 @@
-FROM python:3.12-slim
+# --- build ---
+FROM golang:1.26-alpine AS build
 
-ENV PYTHONUNBUFFERED=1
+WORKDIR /src
 
-WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+# Static binary; the HTML template and static assets are embedded into it.
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /docuscrypt .
 
-COPY app ./app
+# --- runtime ---
+# Distroless: no shell or package manager, just the binary. Runs as non-root.
+FROM gcr.io/distroless/static-debian12:nonroot
 
-# Runs as non-root for a little extra safety, even in a homelab
-RUN useradd -m appuser
-USER appuser
+COPY --from=build /docuscrypt /docuscrypt
+USER nonroot:nonroot
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/docuscrypt"]
