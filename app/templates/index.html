@@ -9,7 +9,7 @@
 <body>
   <main class="card">
     <h1>DocusCrypt</h1>
-    <p class="subtitle">Encrypt or decrypt password-protected documents — Office files and PDFs.</p>
+    <p class="subtitle">Encrypt or decrypt password-protected MS Office files.</p>
 
     <div class="toggle" role="tablist">
       <button type="button" class="toggle-btn active" data-mode="decrypt">Decrypt</button>
@@ -55,8 +55,8 @@
   </div>
 
   <script>
-    window.SUPPORTED_DECRYPT_EXT = {{ .DecryptExts }};
-    window.SUPPORTED_ENCRYPT_EXT = {{ .EncryptExts }};
+    window.SUPPORTED_DECRYPT_EXT = {{ decrypt_exts | tojson }};
+    window.SUPPORTED_ENCRYPT_EXT = {{ encrypt_exts | tojson }};
   </script>
   <script src="/static/script.js"></script>
 </body>
