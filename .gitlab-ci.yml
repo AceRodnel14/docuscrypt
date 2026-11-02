@@ -1,13 +1,5 @@
+# Branches and MRs: lint + tests. Default branch and release tags (latest, vX.Y, vX.Y.Z):
+# test build + smoke run, multi-arch image to Docker Hub, GitHub sync.
 include:
-  # - 'https://gitlab.com/acerodnel/gitlab-actions/-/raw/main/templates/sync_to_github.yml'
-  # - 'https://gitlab.com/acerodnel/gitlab-actions/-/raw/main/templates/build_container_images_all.yml'
-  - project: 'acerodnel/gitlab-actions'
-    file: 'templates/sync_to_github.yml'
-  - project: 'acerodnel/gitlab-actions'
-    file: 'templates/build_container_images_dockerhub.yml'
-
-stages:
-  - validate
-  - build
-  - sync
-  - cleanup
+  - project: '$CI_PROJECT_NAMESPACE/gitlab-actions'
+    file: 'templates/app.yml'

@@ -1,0 +1,15 @@
+# golangci-lint v2: the standard linters plus error wrapping, closed bodies and typos.
+# Run `golangci-lint run ./...` from the repo root.
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - bodyclose
+    - misspell
+  exclusions:
+    paths:
+      - web # the Vite UI (node_modules, dist) is not Go
+formatters:
+  enable:
+    - gofmt

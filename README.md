@@ -46,40 +46,69 @@ ones.
 implements their encryption. DocusCrypt v1 (Python) could *decrypt* these; if
 you still need that, keep a v1 image around.
 
-## Running with Docker
+## Self-hosting
 
-Build the image from the project root:
+### Requirements
+- Docker with the Compose plugin, on `linux/amd64` or `linux/arm64`.
+- Optional: a reverse proxy in front for HTTPS. The app itself only serves plain HTTP on
+  port `8080` and has no TLS or login of its own by design (meant for a trusted network).
+
+### Quick start
+> **No `.env` is needed**: docuscrypt runs with the defaults. To publish on another host port
+> (`APP_PORT`) or pin a release (`IMAGE`), create `.env` from `.env.example` before the first
+> start. Keep `PORT=8080` under Compose.
 
 ```bash
-docker build -t docuscrypt .
+mkdir docuscrypt && cd docuscrypt
+curl -fsSLO https://raw.githubusercontent.com/AceRodnel14/docuscrypt/main/docker-compose.yml
+docker compose pull
+docker compose up -d
+```
+Open `http://<host>:8080`. Check health with `curl -f http://<host>:8080/healthz`.
+To build from source instead, see [Development](#development).
+
+> **Upgrading from an older release:** the container port changed from `8000` to `8080`.
+> Update your port mapping (`-p 8000:8080` keeps the old host port; with Compose set
+> `APP_PORT=8000`) and any proxy target pointing at the container's port.
+
+### Try it with `docker run`
+```bash
+docker run --rm -p 8080:8080 eacer/docuscrypt:latest
 ```
 
-Run it:
+### Configuration
+| Variable | Default | Description |
+| :- | :- | :- |
+| `PORT` | `8080` | HTTP port inside the container |
+| `IMAGE` | `eacer/docuscrypt:latest` | Image (and tag) Compose runs or builds |
+| `APP_BIND` | `0.0.0.0` | Host address Compose publishes on (`127.0.0.1` behind a local proxy) |
+| `APP_PORT` | `8080` | Host port Compose publishes |
+
+### Data and backups
+Nothing to back up: there is no volume and no database. Files are processed in memory per
+request, and anything that spills to the container's temp dir (very large uploads) is
+deleted as soon as the response is sent.
+
+### Upgrading
+`latest` is the latest stable image and what Compose uses by default; `main` follows the default
+branch. Release tags `vX.Y` and `vX.Y.Z` are pushed when a release is tagged: pin `IMAGE` to `vX.Y`
+for patch updates only, then `docker compose pull && docker compose up -d`.
+
+### Health endpoints
+- `/healthz`: the process is up (liveness).
+- `/readyz`: ready to serve (readiness). docuscrypt has no dependencies, so it answers `200`
+  as soon as the server is up.
+- The image's `HEALTHCHECK` runs `/docuscrypt healthcheck` (the runtime image is distroless,
+  with no shell or curl). The server drains in-flight requests on `SIGTERM`, which plays
+  nicely with KEDA scale-to-zero.
+
+## Development
+Requires Go 1.26+ (or only Docker).
 
 ```bash
-docker run --rm -p 8000:8000 docuscrypt
-```
-
-Then open **http://localhost:8000** in a browser.
-
-No environment variables or volumes are required — the container is fully
-self-contained and stateless. If you want to put it behind Traefik (or any
-other reverse proxy) for HTTPS, just point the proxy at this container's port
-`8000`; the app itself has no TLS/auth logic of its own by design (intended
-for a trusted homelab network).
-
-A `/healthz` endpoint is available for liveness/readiness probes. The runtime
-image is distroless (no shell), so use HTTP probes rather than `exec` ones.
-The server drains in-flight requests on `SIGTERM`, which plays nicely with
-KEDA scale-to-zero.
-
-## Running locally without Docker
-
-Requires Go 1.26+.
-
-```bash
-go run .          # serves on http://localhost:8000
-go test ./...     # unit tests (routing, Office + PDF round-trips, passwords)
+docker compose up --build   # the whole app, as self-hosters run it
+go test ./...               # unit tests (routing, Office + PDF round-trips, passwords, HTTP)
+go run .                    # serves on http://localhost:8080 (PORT to change)
 ```
 
 ## Usage guide
@@ -95,6 +124,15 @@ go test ./...     # unit tests (routing, Office + PDF round-trips, passwords)
      length slider and optionally include symbols, then click **Generate**.
    - Click the eye icon at any time to reveal/hide the password field, whether
      it was typed, pasted, or generated.
+   - **Password characters (limitation):** use only the letters, digits and
+     symbols on a standard US-English keyboard, with no spaces (e.g.
+     `Correct-Horse_9!`). Spaces, accented or non-Latin letters, emoji and
+     symbols like `€` are not supported yet, for any file type: DocusCrypt
+     aims to work on the most basic setup, a machine without extra fonts.
+     Encryption doesn't block them, so a file (PDFs in particular) encrypted
+     with such a password may not decrypt in DocusCrypt. Passwords from
+     **Generate password**, with or without symbols, always stay within the
+     supported set.
 4. **Submit** — click **Decrypt file** / **Encrypt file**. On success, the
    processed file downloads automatically (named `<original>_decrypted.ext`
    or `<original>_encrypted.ext`). On failure — wrong password, unsupported
@@ -106,7 +144,8 @@ go test ./...     # unit tests (routing, Office + PDF round-trips, passwords)
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/` | Web UI |
-| `GET` | `/healthz` | Liveness/readiness: `{"status":"ok"}` |
+| `GET` | `/healthz` | Liveness: `{"status":"ok"}` |
+| `GET` | `/readyz` | Readiness: `200` once the server is up |
 | `GET` | `/api/generate-password?length=16&symbols=false` | Random password (length clamped to 4–128) |
 | `POST` | `/api/check` | Pre-flight: form fields `mode`, `file` → `{"ok": true}` or `{"ok": false, "error": "..."}` |
 | `POST` | `/api/process` | Form fields `mode`, `password`, `file` → processed file, or `{"detail": "..."}` on error |
@@ -115,7 +154,8 @@ go test ./...     # unit tests (routing, Office + PDF round-trips, passwords)
 
 ```
 docuscrypt/
-├── main.go                 # HTTP server and routes (embeds app/)
+├── main.go                 # HTTP server, routes, healthcheck subcommand (embeds app/)
+├── main_test.go            # HTTP tests (/healthz, /readyz)
 ├── internal/
 │   ├── docs/
 │   │   ├── docs.go         # file-type detection and routing
@@ -131,7 +171,14 @@ docuscrypt/
 │       └── script.js
 ├── go.mod / go.sum
 ├── Dockerfile
+├── docker-compose.yml
+├── .env.example
 ├── .dockerignore
+├── .gitlab-ci.yml          # gitlab-actions app.yml pipeline
+├── .golangci.yml
+├── dockerdesc.md           # Docker Hub description
+├── CHANGELOG.md
+├── LICENSE
 └── README.md
 ```
 
@@ -140,3 +187,6 @@ docuscrypt/
 This is designed to deploy cleanly with the homelab's existing
 Traefik + KEDA scale-to-zero template, minus the PVC (this app deliberately
 has no persistent storage needs). That manifest set is a separate follow-up.
+
+---
+_Developed with assistance from Claude (Claude Opus 5.5, Claude Sonnet 5.5)._

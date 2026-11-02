@@ -1,0 +1,19 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <title>DocusCrypt</title>
+  <defs>
+    <g id="doc"><path fill="#0065D9" d="M20 10 H65 L80 25 V90 H20 Z"/><path fill="#fff" d="M65 10 V25 H80"/>
+      <rect x="27" y="35" width="45" height="8" rx="4" fill="#fff"/><rect x="27" y="51" width="28" height="8" rx="4" fill="#fff"/>
+      <rect x="60" y="51" width="12" height="8" rx="4" fill="#fff"/><rect x="27" y="67" width="18" height="8" rx="4" fill="#fff"/>
+      <rect x="50" y="67" width="22" height="8" rx="4" fill="#fff"/></g>
+    <clipPath id="top"><rect width="100" height="47"/></clipPath>
+    <clipPath id="mid"><rect y="47" width="100" height="16"/></clipPath>
+    <clipPath id="bot"><rect y="63" width="100" height="37"/></clipPath>
+  </defs>
+  <use href="#doc" clip-path="url(#top)"/>
+  <g clip-path="url(#mid)">
+    <rect x="31" y="47" width="60" height="16" fill="#00E5FF"/>
+    <rect x="23" y="47" width="60" height="16" fill="#FF2E63"/>
+    <use href="#doc" transform="translate(10 0)"/>
+  </g>
+  <use href="#doc" clip-path="url(#bot)"/>
+</svg>

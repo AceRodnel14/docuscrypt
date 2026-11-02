@@ -24,7 +24,7 @@ func minimalOOXML(t *testing.T) []byte {
 		if err != nil {
 			t.Fatal(err)
 		}
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	}
 	if err := zw.Close(); err != nil {
 		t.Fatal(err)

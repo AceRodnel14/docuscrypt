@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io"
 	"io/fs"
@@ -25,8 +26,12 @@ import (
 	"github.com/AceRodnel14/docuscrypt/internal/passwords"
 )
 
+// version is the release; override at build time with
+// -ldflags "-X main.version=1.2.3".
+var version = "3.0.0"
+
 const (
-	listenAddr = ":8000"
+	defaultPort = "8080"
 	// Uploads up to this size are parsed in memory; anything larger spills to
 	// the container's own temp dir and is removed when the request ends.
 	multipartMemory = 32 << 20
@@ -43,23 +48,71 @@ var (
 	indexTmpl = template.Must(template.New("index").Parse(indexHTML))
 )
 
-func main() {
+// listenPort returns the validated PORT (default 8080).
+func listenPort() (string, error) {
+	p := os.Getenv("PORT")
+	if p == "" {
+		return defaultPort, nil
+	}
+	if n, err := strconv.Atoi(p); err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("invalid PORT %q", p)
+	}
+	return p, nil
+}
+
+// healthcheck backs the image's HEALTHCHECK (distroless has no curl).
+func healthcheck() int {
+	port, err := listenPort()
+	if err != nil {
+		return 1
+	}
+	client := http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:" + port + "/healthz")
+	if err != nil {
+		return 1
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
+}
+
+func routes() (http.Handler, error) {
 	static, err := fs.Sub(staticFiles, "app/static")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", handleIndex)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 	mux.HandleFunc("GET /healthz", handleHealthz)
+	mux.HandleFunc("GET /readyz", handleHealthz) // no dependencies: ready as soon as it is up
 	mux.HandleFunc("GET /api/generate-password", handleGeneratePassword)
 	mux.HandleFunc("POST /api/check", handleCheck)
 	mux.HandleFunc("POST /api/process", handleProcess)
+	return mux, nil
+}
+
+func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck())
+	}
+	port, err := listenPort()
+	if err != nil {
+		logger.Error("bad config", "err", err)
+		os.Exit(1)
+	}
+	handler, err := routes()
+	if err != nil {
+		panic(err)
+	}
+	addr := "0.0.0.0:" + port
 
 	srv := &http.Server{
-		Addr:              listenAddr,
-		Handler:           mux,
+		Addr:              addr,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -73,7 +126,7 @@ func main() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	logger.Info("listening", "addr", listenAddr)
+	logger.Info("listening", "addr", addr, "version", version)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Error("server failed", "err", err)
 		os.Exit(1)
@@ -154,7 +207,7 @@ func readUpload(r *http.Request) (name string, data []byte, cleanup func(), err 
 	if err != nil {
 		return "", nil, cleanup, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	data, err = io.ReadAll(f)
 	return filepath.Base(hdr.Filename), data, cleanup, err

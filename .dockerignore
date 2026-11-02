@@ -2,6 +2,7 @@
 .gitignore
 .gitlab-ci.yml
 .env
+.env.*
 *.md
 *_test.go
 docuscrypt
