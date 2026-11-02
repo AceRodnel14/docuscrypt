@@ -110,6 +110,7 @@ docker compose up --build   # the whole app, as self-hosters run it
 go test ./...               # unit tests (routing, Office + PDF round-trips, passwords, HTTP)
 go run .                    # serves on http://localhost:8080 (PORT to change)
 ```
+`./manual_cicd_lint.sh` runs the CI lint/test jobs locally in throwaway containers (`--list`, `--only`, `--skip`).
 
 ## Usage guide
 

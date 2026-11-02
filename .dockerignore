@@ -6,3 +6,4 @@
 *.md
 *_test.go
 docuscrypt
+manual_cicd_lint.sh
